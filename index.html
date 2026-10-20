@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Halloween Hangman</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #140a24;
+    --night-2: #2a1245;
+    --panel: #1d0e33;
+    --line: #4a2a78;
+    --orange: #ff7a18;
+    --slime: #a6ff3c;
+    --bone: #efe6d0;
+    --blood: #ff3b5c;
+    --muted: #b9a5d6;
+    --display: "Creepster", "Chiller", Impact, fantasy;
+    --body: "Special Elite", "Courier New", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  body {
+    height: 100vh; height: 100dvh;
+    background: var(--night);
+    color: var(--bone);
+    font-family: var(--body);
+  }
+
+  /* ---------- layout: everything fits in the viewport, no scrolling ---------- */
+  .app {
+    height: 100%;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  .scene {
+    min-height: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 2px solid var(--line);
+    box-shadow: 0 0 40px rgba(255, 122, 24, 0.12) inset;
+    background: var(--night-2);
+  }
+  .scene svg { width: 100%; height: 100%; display: block; }
+
+  .panel {
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: 18px;
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  @media (min-width: 820px) and (min-height: 480px) {
+    .app { grid-template-rows: none; grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.9fr); gap: 16px; padding: 16px; }
+    .panel { justify-content: center; gap: clamp(8px, 2vh, 20px); padding: 20px 24px; }
+  }
+
+  .eyebrow { margin: 0; color: var(--orange); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+  h1 {
+    margin: 0;
+    font: 400 clamp(22px, 4.2vh, 38px)/1.05 var(--display);
+    letter-spacing: .03em;
+    color: var(--slime);
+    text-shadow: 0 0 14px rgba(166, 255, 60, .35);
+  }
+  .hint { margin: 0; font-size: clamp(13px, 2vh, 17px); line-height: 1.35; color: var(--bone); }
+  .hint b { color: var(--orange); font-weight: normal; text-transform: uppercase; letter-spacing: .1em; font-size: .8em; margin-right: 6px; }
+
+  /* ---------- word ---------- */
+  .word { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; min-height: clamp(36px, 6vh, 56px); }
+  .slot {
+    width: clamp(26px, 5.2vh, 44px);
+    height: clamp(34px, 6vh, 52px);
+    border-radius: 8px 8px 4px 4px;
+    background: rgba(255, 255, 255, .05);
+    border-bottom: 3px solid var(--orange);
+    text-align: center;
+    font: 400 clamp(22px, 4.4vh, 38px)/clamp(34px, 6vh, 52px) var(--display);
+    color: var(--bone);
+  }
+  .slot.gap { background: none; border-color: transparent; width: 14px; }
+  .slot.punct { background: none; border-color: transparent; width: 18px; }
+  .slot.missed { color: var(--blood); }
+
+  /* ---------- lives ---------- */
+  .lives { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted); }
+  .pumpkins { display: flex; gap: 3px; font-size: clamp(16px, 2.6vh, 22px); line-height: 1; }
+  .pumpkins span { transition: transform .2s, filter .2s; }
+  .pumpkins span.lost { filter: grayscale(1) brightness(.5); transform: scale(.8); }
+  .lives b { color: var(--bone); font-weight: normal; }
+
+  /* ---------- keyboard: tombstone keys ---------- */
+  .keyboard { display: grid; grid-template-columns: repeat(9, 1fr); gap: clamp(4px, 1vh, 8px); }
+  .keyboard button {
+    aspect-ratio: 1 / 1.08;
+    min-width: 0;
+    padding: 0;
+    background: linear-gradient(#3a1f60, #2a1245);
+    color: var(--bone);
+    border: 2px solid var(--line);
+    border-radius: 50% 50% 6px 6px / 38% 38% 6px 6px;
+    font: 400 clamp(16px, 3vh, 24px)/1 var(--display);
+    cursor: pointer;
+    transition: transform .1s, border-color .15s, background .15s;
+  }
+  .keyboard button:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--orange); }
+  .keyboard button:disabled { cursor: default; }
+  .keyboard button.hit { background: #2c5a14; border-color: var(--slime); color: var(--slime); }
+  .keyboard button.miss { background: #1a0d24; border-color: #3a2552; color: #5c4577; text-decoration: line-through; }
+  .keyboard button:disabled:not(.hit):not(.miss) { opacity: .4; }
+
+  /* ---------- result overlay (floats over the page, so it never adds scroll) ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: rgba(10, 4, 20, .72);
+    backdrop-filter: blur(3px);
+    z-index: 10;
+    padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    width: min(360px, 100%);
+    text-align: center;
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: 20px;
+    padding: 22px 20px;
+    animation: pop .25s ease-out;
+  }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } }
+  .modal h2 { margin: 0 0 4px; font: 400 44px/1 var(--display); }
+  .overlay.win h2 { color: var(--slime); text-shadow: 0 0 16px rgba(166, 255, 60, .4); }
+  .overlay.lose h2 { color: var(--blood); text-shadow: 0 0 16px rgba(255, 59, 92, .4); }
+  .modal p { margin: 0 0 16px; color: var(--muted); }
+  .modal button {
+    background: var(--orange); color: #200c00; border: 0; border-radius: 12px;
+    padding: 10px 26px; font: 400 22px/1 var(--display); letter-spacing: .04em; cursor: pointer;
+  }
+  .modal button:hover { filter: brightness(1.1); }
+
+  /* ---------- scene animation ---------- */
+  .part { display: none; }
+  .part.show { display: inline; }
+  .swing { transform-origin: 262px 62px; animation: swing 3.2s ease-in-out infinite alternate; }
+  @keyframes swing { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+  .flap { transform-box: fill-box; transform-origin: center; animation: flap .5s ease-in-out infinite alternate; }
+  @keyframes flap { from { transform: scaleY(1); } to { transform: scaleY(.55); } }
+  .fly { animation: fly 14s linear infinite; }
+  @keyframes fly { from { transform: translateX(-60px); } to { transform: translateX(480px); } }
+  .glow { animation: glow 2.4s ease-in-out infinite alternate; }
+  @keyframes glow { from { opacity: .55; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="scene">
+    <svg viewBox="0 0 400 360" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Hangman scene">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1a0b33"/>
+          <stop offset=".6" stop-color="#4a1d6b"/>
+          <stop offset="1" stop-color="#b3482e"/>
+        </linearGradient>
+        <radialGradient id="moonGlow">
+          <stop offset="0" stop-color="#ffb347" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <rect width="400" height="360" fill="url(#sky)"/>
+
+      <!-- stars -->
+      <g fill="#fff" opacity=".8">
+        <circle cx="30" cy="30" r="1.2"/><circle cx="80" cy="70" r="1"/><circle cx="150" cy="25" r="1.4"/>
+        <circle cx="210" cy="60" r="1"/><circle cx="360" cy="20" r="1.2"/><circle cx="25" cy="120" r="1"/>
+        <circle cx="190" cy="110" r="1"/><circle cx="120" cy="150" r="1"/>
+      </g>
+
+      <!-- moon -->
+      <circle cx="320" cy="85" r="80" fill="url(#moonGlow)"/>
+      <circle cx="320" cy="85" r="38" fill="#ffb347"/>
+      <circle cx="308" cy="74" r="7" fill="#f09a2c"/><circle cx="332" cy="98" r="9" fill="#f09a2c"/><circle cx="335" cy="66" r="4" fill="#f09a2c"/>
+
+      <!-- haunted house -->
+      <g fill="#0f0618">
+        <path d="M285 300 V230 h18 V205 l12 -18 l12 18 V225 h22 V200 l10 -16 l10 16 V300z"/>
+        <path d="M282 232 L310 214 L338 232z"/>
+        <rect x="318" y="170" width="6" height="22"/>
+      </g>
+      <g fill="#ffd24a" class="glow">
+        <rect x="306" y="240" width="8" height="12" rx="2"/>
+        <rect x="334" y="240" width="8" height="12" rx="2"/>
+        <rect x="364" y="236" width="8" height="12" rx="2"/>
+      </g>
+
+      <!-- bats -->
+      <g class="fly" fill="#0f0618">
+        <g class="flap"><path d="M40 60 q6 -9 12 0 q6 -9 12 0 q-3 3 -6 9 q-6 -4 -12 0 q-3 -6 -6 -9z"/></g>
+      </g>
+      <g class="fly" style="animation-delay:-7s;animation-duration:18s" fill="#0f0618" transform="translate(0 50)">
+        <g class="flap" style="animation-delay:.2s"><path d="M40 60 q5 -7 10 0 q5 -7 10 0 q-2 2 -5 7 q-5 -3 -10 0 q-2 -5 -5 -7z"/></g>
+      </g>
+
+      <!-- ground & tombstones -->
+      <path d="M0 300 C80 285 160 300 260 292 C320 288 360 296 400 290 V360 H0z" fill="#0f0618"/>
+      <g fill="#241238" stroke="#3a2158" stroke-width="2">
+        <path d="M150 330 v-26 a10 10 0 0 1 20 0 v26z"/>
+        <path d="M215 335 v-20 a9 9 0 0 1 18 0 v20z"/>
+        <path d="M330 340 v-22 a9 9 0 0 1 18 0 v22z"/>
+      </g>
+      <g stroke="#3a2158" stroke-width="2" stroke-linecap="round" fill="none">
+        <path d="M160 312 v8 M156 316 h8"/><path d="M224 322 v7 M220 325 h8"/>
+      </g>
+      <ellipse cx="200" cy="345" rx="230" ry="14" fill="#7a4aa8" opacity=".18"/>
+
+      <!-- dead tree gallows -->
+      <g fill="none" stroke="#0a0410" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M70 330 C 80 270, 55 190, 85 80" stroke-width="22"/>
+        <path d="M60 335 L 40 345 M80 335 L 105 346" stroke-width="10"/>
+        <path d="M85 85 C 140 50, 210 60, 275 58" stroke-width="13"/>
+        <path d="M110 120 C 135 100, 150 92, 170 90" stroke-width="7"/>
+        <path d="M85 150 C 60 130, 45 125, 30 105" stroke-width="7"/>
+        <path d="M200 62 C 210 80, 225 85, 235 82" stroke-width="5"/>
+        <path d="M75 55 C 60 45, 55 30, 60 18" stroke-width="6"/>
+      </g>
+
+      <!-- hanged skeleton, revealed one part per wrong guess -->
+      <g class="swing" stroke="#efe6d0" stroke-width="5" stroke-linecap="round" fill="none">
+        <path d="M262 58 V88" stroke="#b89a64" stroke-width="3"/>
+        <path d="M254 90 q8 8 16 0" stroke="#b89a64" stroke-width="3" class="part show" id="noose"/>
+
+        <g class="part" id="p0">
+          <ellipse cx="262" cy="108" rx="19" ry="20" fill="#efe6d0" stroke="none"/>
+          <rect x="252" y="120" width="20" height="10" rx="3" fill="#efe6d0" stroke="none"/>
+          <circle cx="255" cy="106" r="5" fill="#140a24" stroke="none"/>
+          <circle cx="269" cy="106" r="5" fill="#140a24" stroke="none"/>
+          <path d="M262 112 l-2 6 h4z" fill="#140a24" stroke="none"/>
+          <path d="M255 124 v5 M262 124 v5 M269 124 v5" stroke="#140a24" stroke-width="1.6"/>
+        </g>
+        <g class="part" id="p1">
+          <path d="M262 132 V205"/>
+          <path d="M250 150 h24 M252 164 h20 M254 178 h16" stroke-width="4"/>
+          <path d="M252 205 h20" stroke-width="6"/>
+        </g>
+        <path class="part" id="p2" d="M258 150 L226 172 L222 196"/>
+        <path class="part" id="p3" d="M266 150 L298 172 L302 196"/>
+        <path class="part" id="p4" d="M256 207 L244 244 L236 278"/>
+        <path class="part" id="p5" d="M268 207 L280 244 L288 278"/>
+      </g>
+    </svg>
+  </div>
+
+  <section class="panel">
+    <p class="eyebrow" id="eyebrow"></p>
+    <h1 id="title"></h1>
+    <p class="hint"><b>Hint</b><span id="hint"></span></p>
+    <div class="word" id="word" aria-live="polite"></div>
+    <div class="lives">
+      <div class="pumpkins" id="pumpkins" aria-hidden="true"></div>
+      <span>Wrong letters: <b id="wrongCount"></b></span>
+    </div>
+    <div class="keyboard" id="keyboard"></div>
+  </section>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="resultTitle"></h2>
+    <p id="resultText"></p>
+    <button id="again">Play again</button>
+  </div>
+</div>
+
+<script>
+  const CONFIG = {
+    word: "SEFMTFVDSU5BVElPTg==",
+    hint: "Not just for humans anymore",
+    eyebrow: "Halloween Hangman #3 · Fun Club",
+    title: "Word #3 is hidden. How long will it last?",
+    maxWrong: 6,                         // number of wrong guesses allowed
+    winText: "You saved the skeleton! 🎃",
+    loseText: "The skeleton is hanged… 👻"
+  };
+
+  // Body parts revealed in order — maxWrong picks evenly from these 6.
+  const PARTS = ["p0", "p1", "p2", "p3", "p4", "p5"];
+
+  const $ = (id) => document.getElementById(id);
+  const secret = atob(CONFIG.word).toUpperCase();
+  const max = Math.min(Math.max(CONFIG.maxWrong, 1), 12);
+  let guessed, wrong, over;
+
+  function partsToShow(wrongCount) {
+    return Math.round((wrongCount / max) * PARTS.length);
+  }
+
+  function render() {
+    $("word").innerHTML = "";
+    for (const ch of secret) {
+      const d = document.createElement("div");
+      d.className = "slot";
+      if (ch === " ") d.classList.add("gap");
+      else if (!/[A-Z]/.test(ch)) { d.classList.add("punct"); d.textContent = ch; }
+      else if (guessed.has(ch)) d.textContent = ch;
+      else if (over === "lose") { d.textContent = ch; d.classList.add("missed"); }
+      $("word").appendChild(d);
+    }
+    $("pumpkins").innerHTML = "";
+    for (let i = 0; i < max; i++) {
+      const p = document.createElement("span");
+      p.textContent = "🎃";
+      if (i < wrong) p.className = "lost";
+      $("pumpkins").appendChild(p);
+    }
+    $("wrongCount").textContent = wrong + " / " + max;
+    const n = partsToShow(wrong);
+    PARTS.forEach((id, i) => $(id).classList.toggle("show", i < n));
+  }
+
+  function guess(letter) {
+    if (over || guessed.has(letter)) return;
+    guessed.add(letter);
+    const btn = document.querySelector(`[data-l="${letter}"]`);
+    btn.disabled = true;
+    if (secret.includes(letter)) btn.classList.add("hit");
+    else { btn.classList.add("miss"); wrong++; }
+
+    const won = [...secret].every((c) => !/[A-Z]/.test(c) || guessed.has(c));
+    if (won) over = "win";
+    else if (wrong >= max) over = "lose";
+    render();
+    if (over) endGame();
+  }
+
+  function endGame() {
+    document.querySelectorAll(".keyboard button").forEach((b) => (b.disabled = true));
+    $("resultTitle").textContent = over === "win" ? "You win!" : "You lose!";
+    $("resultText").textContent = over === "win" ? CONFIG.winText : CONFIG.loseText;
+    // small pause so the final letter / body part is seen before the overlay
+    setTimeout(() => { $("overlay").className = "overlay show " + over; $("again").focus(); }, 600);
+  }
+
+  function start() {
+    guessed = new Set(); wrong = 0; over = null;
+    $("overlay").className = "overlay";
+    const kb = $("keyboard");
+    kb.innerHTML = "";
+    for (const l of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      const b = document.createElement("button");
+      b.textContent = l; b.dataset.l = l;
+      b.addEventListener("click", () => guess(l));
+      kb.appendChild(b);
+    }
+    render();
+  }
+
+  $("eyebrow").textContent = CONFIG.eyebrow;
+  $("title").textContent = CONFIG.title;
+  $("hint").textContent = CONFIG.hint;
+  document.title = CONFIG.eyebrow;
+  $("again").addEventListener("click", start);
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const l = e.key.toUpperCase();
+    if (/^[A-Z]$/.test(l)) guess(l);
+  });
+  start();
+</script>
+</body>
+</html>
