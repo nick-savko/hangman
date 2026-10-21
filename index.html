@@ -326,7 +326,6 @@
       if (ch === " ") d.classList.add("gap");
       else if (!/[A-Z]/.test(ch)) { d.classList.add("punct"); d.textContent = ch; }
       else if (guessed.has(ch)) d.textContent = ch;
-      else if (over === "lose") { d.textContent = ch; d.classList.add("missed"); }
       $("word").appendChild(d);
     }
     $("pumpkins").innerHTML = "";
